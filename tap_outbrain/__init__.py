@@ -330,20 +330,15 @@ def do_sync(args, catalog: singer.Catalog):
     CONFIG.update(config)
 
     missing_keys = []
-    if 'username' not in config:
-        missing_keys.append('username')
-    else:
-        username = config['username']
-
-    if 'password' not in config:
-        missing_keys.append('password')
-    else:
-        password = config['password']
-
     if 'account_id' not in config:
         missing_keys.append('account_id')
     else:
         account_id = config['account_id']
+
+    if 'access_token' not in config:
+        missing_keys.append('access_token')
+    else:
+        access_token = config.get('access_token')
 
     if 'start_date' not in config:
         missing_keys.append('start_date')
@@ -355,14 +350,12 @@ def do_sync(args, catalog: singer.Catalog):
         LOGGER.fatal("Missing {}.".format(", ".join(missing_keys)))
         raise RuntimeError
 
-    access_token = config.get('access_token')
+    # if access_token is None:
+    #     access_token = generate_token(username, password)
 
-    if access_token is None:
-        access_token = generate_token(username, password)
-
-    if access_token is None:
-        LOGGER.fatal("Failed to generate a new access token.")
-        raise RuntimeError
+    # if access_token is None:
+    #     LOGGER.fatal("Failed to generate a new access token.")
+    #     raise RuntimeError
 
     # NEVER RAISE THIS ABOVE DEBUG!
     LOGGER.debug('Using access token `{}`'.format(access_token))
