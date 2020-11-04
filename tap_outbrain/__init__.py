@@ -33,9 +33,8 @@ DEFAULT_STATE = {
 
 REQUIRED_CONFIG_KEYS = [
     "start_date",
-    "username",
-    "password",
-    'account_id'
+    'account_id',
+    'access_token'
 ]
 
 DEFAULT_START_DATE = '2016-08-01'
