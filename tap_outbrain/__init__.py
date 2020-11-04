@@ -304,7 +304,24 @@ def sync_campaigns(state, access_token, account_id):
     LOGGER.info('Done!')
 
 
-def do_sync(args):
+def get_selected_streams(catalog: singer.Catalog) -> list:
+    """
+    Gets selected streams.  Checks schema's 'selected' first (legacy)
+    and then checks metadata (current), looking for an empty breadcrumb
+    and data with a 'selected' entry
+    """
+    selected_streams = list()
+
+    for stream in catalog.streams:
+        stream_metadata = singer.metadata.to_map(stream.metadata)
+        # stream metadata will have an empty breadcrumb
+        if singer.metadata.get(stream_metadata, (), "selected"):
+            selected_streams.append(stream.tap_stream_id)
+
+    return selected_streams
+
+
+def do_sync(args, catalog: singer.Catalog):
     # pylint: disable=global-statement
     global DEFAULT_START_DATE
     state = DEFAULT_STATE
@@ -350,15 +367,30 @@ def do_sync(args):
     # NEVER RAISE THIS ABOVE DEBUG!
     LOGGER.debug('Using access token `{}`'.format(access_token))
 
-    singer.write_schema('campaigns',
-                        schemas["campaign"],
-                        key_properties=["id"])
-    singer.write_schema('campaign_performance',
-                        schemas["campaign_performance"],
-                        key_properties=["campaignId", "fromDate"],
-                        bookmark_properties=["fromDate"])
+    selected_stream_ids = get_selected_streams(catalog)
+    if not selected_stream_ids:
+        singer.log_warning('No streams selected')
+    for stream in catalog.streams:
+        stream_id = stream.tap_stream_id
 
-    sync_campaigns(state, access_token, account_id)
+        # Skip if not selected for sync
+        if stream_id not in selected_stream_ids:
+            continue
+        LOGGER.info('Syncing ' + stream_id)
+
+        singer.write_schema(stream_id,
+                            schema=stream.schema.to_dict(),
+                            key_properties=["id"],
+                            bookmark_properties=["fromDate"])
+        api_func_map(stream_id)(state, access_token, account_id)
+
+
+def api_func_map(stream_id):
+    map = {
+        "campaign": sync_campaigns,
+        "campaign_performance": sync_campaigns
+    }
+    return map[stream_id]
 
 
 def discover() -> singer.Catalog:
@@ -376,11 +408,12 @@ def discover() -> singer.Catalog:
     # Build catalog by iterating over schemas
     for name in schemas:
         schema_name = name
-        schema = schemas[name]
+        metadata = schemas[name]["metadata"]
+        schema = singer.Schema.from_dict(data=schemas[name])
         stream_metadata = list()
         stream_key_properties = list()
 
-        stream_metadata.extend(schema["metadata"])
+        stream_metadata.extend(metadata)
         stream_key_properties.extend(key_properties.get(schema_name, list()))
 
         # Create catalog entry
@@ -392,8 +425,7 @@ def discover() -> singer.Catalog:
         catalog_entry.metadata = stream_metadata
         catalog_entry.key_properties = stream_key_properties
 
-        streams.append(catalog_entry.__dict__)
-
+        streams.append(catalog_entry)
     return singer.Catalog(streams)
 
 
@@ -401,9 +433,13 @@ def main_impl():
     args = singer.utils.parse_args(REQUIRED_CONFIG_KEYS)
     if args.discover:
         catalog = discover()
-        print(json.dumps(catalog.__dict__, indent=2))
+        print(json.dumps(catalog.to_dict(), indent=2))
     else:
-        do_sync(args)
+        if args.catalog:
+            catalog = args.catalog
+        else:
+            catalog = discover()
+        do_sync(args, catalog)
 
 
 def main():
