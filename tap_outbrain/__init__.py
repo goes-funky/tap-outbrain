@@ -20,6 +20,7 @@ from singer import utils
 
 import tap_outbrain.schemas as schemas
 
+schemas = schemas.structure
 LOGGER = singer.get_logger()
 SESSION = requests.Session()
 
@@ -29,6 +30,13 @@ CONFIG = {}
 DEFAULT_STATE = {
     'campaign_performance': {}
 }
+
+REQUIRED_CONFIG_KEYS = [
+    "start_date",
+    "username",
+    "password",
+    'account_id'
+]
 
 DEFAULT_START_DATE = '2016-08-01'
 
@@ -115,7 +123,7 @@ def get_date_ranges(start, end, interval_in_days):
             'from_date': interval_start,
             'to_date': min(end,
                            (interval_start + datetime.timedelta(
-                               days=interval_in_days-1)))
+                               days=interval_in_days - 1)))
         })
 
         interval_start = interval_start + datetime.timedelta(
@@ -161,7 +169,7 @@ def sync_performance(state, access_token, account_id, table_name, state_sub_id,
     # sync 2 days before last saved date, or DEFAULT_START_DATE
     from_date = datetime.datetime.strptime(
         state.get(table_name, {})
-        .get(state_sub_id, DEFAULT_START_DATE),
+            .get(state_sub_id, DEFAULT_START_DATE),
         '%Y-%m-%d').date() - datetime.timedelta(days=2)
 
     to_date = datetime.date.today()
@@ -175,10 +183,10 @@ def sync_performance(state, access_token, account_id, table_name, state_sub_id,
     for date_range in date_ranges:
         LOGGER.info(
             'Pulling {} for {} from {} to {}'
-            .format(table_name,
-                    extra_persist_fields,
-                    date_range.get('from_date'),
-                    date_range.get('to_date')))
+                .format(table_name,
+                        extra_persist_fields,
+                        date_range.get('from_date'),
+                        date_range.get('to_date')))
 
         params = {
             'from': date_range.get('from_date'),
@@ -222,12 +230,12 @@ def sync_performance(state, access_token, account_id, table_name, state_sub_id,
         from_date = new_from_date
 
         if last_request_start is not None and \
-           (time.time() - last_request_end.timestamp()) < 30:
+                (time.time() - last_request_end.timestamp()) < 30:
             to_sleep = 30 - (time.time() - last_request_end.timestamp())
             LOGGER.info(
                 'Limiting to 2 requests per minute. Sleeping {} sec '
                 'before making the next reporting request.'
-                .format(to_sleep))
+                    .format(to_sleep))
             time.sleep(to_sleep)
 
 
@@ -297,13 +305,12 @@ def sync_campaigns(state, access_token, account_id):
 
 
 def do_sync(args):
-    #pylint: disable=global-statement
+    # pylint: disable=global-statement
     global DEFAULT_START_DATE
     state = DEFAULT_STATE
 
-    with open(args.config) as config_file:
-        config = json.load(config_file)
-        CONFIG.update(config)
+    config = args.config
+    CONFIG.update(config)
 
     missing_keys = []
     if 'username' not in config:
@@ -343,29 +350,60 @@ def do_sync(args):
     # NEVER RAISE THIS ABOVE DEBUG!
     LOGGER.debug('Using access token `{}`'.format(access_token))
 
-
     singer.write_schema('campaigns',
-                        schemas.campaign,
+                        schemas["campaign"],
                         key_properties=["id"])
     singer.write_schema('campaign_performance',
-                        schemas.campaign_performance,
+                        schemas["campaign_performance"],
                         key_properties=["campaignId", "fromDate"],
                         bookmark_properties=["fromDate"])
 
     sync_campaigns(state, access_token, account_id)
 
 
+def discover() -> singer.Catalog:
+    """
+    Discover catalog of schemas ie. reporting cube definitions
+    """
+
+    metadata = dict()
+    # Disable key properties to avoid file-not-found errors because these aren't used
+    # key_properties = load_key_properties()
+    key_properties = dict()
+
+    streams = list()
+
+    # Build catalog by iterating over schemas
+    for name in schemas:
+        schema_name = name
+        schema = schemas[name]
+        stream_metadata = list()
+        stream_key_properties = list()
+
+        stream_metadata.extend(schema["metadata"])
+        stream_key_properties.extend(key_properties.get(schema_name, list()))
+
+        # Create catalog entry
+        catalog_entry = singer.catalog.CatalogEntry()
+
+        catalog_entry.stream = schema_name
+        catalog_entry.tap_stream_id = schema_name
+        catalog_entry.schema = schema
+        catalog_entry.metadata = stream_metadata
+        catalog_entry.key_properties = stream_key_properties
+
+        streams.append(catalog_entry.__dict__)
+
+    return singer.Catalog(streams)
+
+
 def main_impl():
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument(
-        '-c', '--config', help='Config file', required=True)
-    parser.add_argument(
-        '-s', '--state', help='State file')
-
-    args = parser.parse_args()
-
-    do_sync(args)
+    args = singer.utils.parse_args(REQUIRED_CONFIG_KEYS)
+    if args.discover:
+        catalog = discover()
+        print(json.dumps(catalog.__dict__, indent=2))
+    else:
+        do_sync(args)
 
 
 def main():
