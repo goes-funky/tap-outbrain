@@ -288,7 +288,7 @@ def sync_campaign_page(state, access_token, account_id, campaign_page):
                  in campaign_page.get('campaigns', [])]
 
     for campaign in campaigns:
-        singer.write_record('campaigns', campaign,
+        singer.write_record('campaign', campaign,
                             time_extracted=utils.now())
         sync_campaign_performance(state, access_token, account_id,
                                   campaign.get('id'))
