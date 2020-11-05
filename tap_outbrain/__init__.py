@@ -283,22 +283,23 @@ def get_campaign_pages(account_id, access_token):
         campaign_page.get('totalCount')))
 
 
-def sync_campaign_page(state, access_token, account_id, campaign_page):
+def sync_campaign_page(state, access_token, account_id, campaign_page, selected_stream_ids):
     campaigns = [parse_campaign(campaign) for campaign
                  in campaign_page.get('campaigns', [])]
 
     for campaign in campaigns:
         singer.write_record('campaign', campaign,
                             time_extracted=utils.now())
-        sync_campaign_performance(state, access_token, account_id,
+        if "campaign_performance" in selected_stream_ids:
+            sync_campaign_performance(state, access_token, account_id,
                                   campaign.get('id'))
 
 
-def sync_campaigns(state, access_token, account_id):
+def sync_campaigns(state, access_token, account_id, selected_stream_ids):
     LOGGER.info('Syncing campaigns.')
 
     for campaign_page in get_campaign_pages(account_id, access_token):
-        sync_campaign_page(state, access_token, account_id, campaign_page)
+        sync_campaign_page(state, access_token, account_id, campaign_page, selected_stream_ids)
 
     LOGGER.info('Done!')
 
@@ -374,7 +375,7 @@ def do_sync(args, catalog: singer.Catalog):
                             schema=stream.schema.to_dict(),
                             key_properties=["id"],
                             bookmark_properties=["fromDate"])
-        api_func_map(stream_id)(state, access_token, account_id)
+        api_func_map(stream_id)(state, access_token, account_id, selected_stream_ids)
 
 
 def api_func_map(stream_id):
