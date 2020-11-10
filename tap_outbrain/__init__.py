@@ -46,7 +46,7 @@ TAP_CAMPAIGN_COUNT_ERROR_CEILING = 660
 MARKETERS_CAMPAIGNS_MAX_LIMIT = 50
 # This is an arbitrary limit and can be tuned later down the road if we
 # see need for it. (Tested with 200 at least)
-REPORTS_MARKETERS_PERIODIC_MAX_LIMIT = 100
+REPORTS_MARKETERS_PERIODIC_MAX_LIMIT = 500
 
 
 @backoff.on_exception(backoff.constant,
