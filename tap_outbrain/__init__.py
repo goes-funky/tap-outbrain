@@ -424,10 +424,8 @@ def discover() -> singer.Catalog:
 
 def check_auth(config):
     # call campaign api only to make sure token works
-    try:
-        get_campaigns_page(config["account_id"], config["access_token"], 0)
-    except requests.exceptions.HTTPError:
-        LOGGER.error("Could not authenticate")
+    get_campaigns_page(config["account_id"], config["access_token"], 0)
+
 
 
 def main_impl():
