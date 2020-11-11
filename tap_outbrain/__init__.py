@@ -292,7 +292,7 @@ def sync_campaign_page(state, access_token, account_id, campaign_page, selected_
                             time_extracted=utils.now())
         if "campaign_performance" in selected_stream_ids:
             sync_campaign_performance(state, access_token, account_id,
-                                  campaign.get('id'))
+                                      campaign.get('id'))
 
 
 def sync_campaigns(state, access_token, account_id, selected_stream_ids):
@@ -422,9 +422,16 @@ def discover() -> singer.Catalog:
     return singer.Catalog(streams)
 
 
+def check_auth(config):
+    # call campaign api only to make sure token works
+    get_campaigns_page(config["account_id"], config["access_token"], 0)
+
+
+
 def main_impl():
     args = singer.utils.parse_args(REQUIRED_CONFIG_KEYS)
     if args.discover:
+        check_auth(args.config)
         catalog = discover()
         print(json.dumps(catalog.to_dict(), indent=2))
     else:
